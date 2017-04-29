@@ -35,8 +35,6 @@ def preprocess_image(image_path, load_dims=False, read_mode="color", maintain_as
     img[:, :, 1] -= 116.779
     img[:, :, 2] -= 123.68
 
-    if K.image_dim_ordering() == "th":
-        img = img.transpose((2, 0, 1)).astype('float32')
 
     img = np.expand_dims(img, axis=0)
     return img
@@ -44,11 +42,7 @@ def preprocess_image(image_path, load_dims=False, read_mode="color", maintain_as
 
 # util function to convert a tensor into a valid image
 def deprocess_image(x):
-    if K.image_dim_ordering() == "th":
-        x = x.reshape((3, img_width, img_height))
-        x = x.transpose((1, 2, 0))
-    else:
-        x = x.reshape((img_width, img_height, 3))
+    x = x.reshape((img_width, img_height, 3))
 
     x[:, :, 0] += 103.939
     x[:, :, 1] += 116.779
@@ -69,10 +63,7 @@ for style_path in style_image_paths:
     style_reference_images.append(K.variable(preprocess_image(style_path)))
 
 # this will contain our generated image
-if K.image_dim_ordering() == 'th':
-    combination_image = K.placeholder((1, 3, img_width, img_height))
-else:
-    combination_image = K.placeholder((1, img_width, img_height, 3))
+combination_image = K.placeholder((1, img_width, img_height, 3)) # tensorflow
 
 image_tensors = [base_image]
 for style_image_tensor in style_reference_images:
@@ -85,10 +76,7 @@ nb_style_images = nb_tensors - 2 # Content and Output image not considered
 # combine the various images into a single Keras tensor
 input_tensor = K.concatenate(image_tensors, axis=0)
 
-if K.image_dim_ordering() == "th":
-    shape = (nb_tensors, 3, img_width, img_height)
-else:
-    shape = (nb_tensors, img_width, img_height, 3)
+shape = (nb_tensors, img_width, img_height, 3) #tensorflow
 
 ip = Input(tensor=input_tensor, shape=shape)
 

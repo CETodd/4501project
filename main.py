@@ -16,7 +16,7 @@ parser = argparse.ArgumentParser(description='Neural style transfer with Keras.'
 parser.add_argument('base_image_path', metavar='base', type=str,
                     help='Path to the image to transform.')
 
-parser.add_argument('syle_image_paths', metavar='ref', type=str,
+parser.add_argument('style_image_path', metavar='ref', type=str,
                     help='Path to the style reference image.')
 
 parser.add_argument('result_prefix', metavar='res_prefix', type=str,
@@ -49,59 +49,138 @@ parser.add_argument("--init_image", dest="init_image", default="content", type=s
 
 args = parser.parse_args()
 
-print(args.base_image_path)
-print(args.syle_image_paths)
-print(args.result_prefix)
-print(args.img_size)
-print(args.content_weight)
-print(args.style_weight)
-print(args.style_scale)
-print(args.num_iter)
-print(args.content_loss_type)
-print(args.content_layer)
-print(args.init_image)
+base_image_path = args.base_image_path
+style_reference_image_paths = [args.style_image_path]
+result_prefix = args.result_prefix
+
+img_width = img_height = 0
+
+img_WIDTH = img_HEIGHT = 0
+aspect_ratio = 0
+
+read_mode = "color"
+
+style_image_paths = [args.style_image_path]
+
+
+def pooling_func(x):
+    # return AveragePooling2D((2, 2), strides=(2, 2))(x)
+    return MaxPooling2D((2, 2), strides=(2, 2))(x)
+
+#start proc_img
+
+def preprocess_image(image_path, load_dims=False, read_mode="color", maintain_aspect_ratio=False):
+    global img_width, img_height, img_WIDTH, img_HEIGHT, aspect_ratio
+
+    mode = "RGB" if read_mode == "color" else "L"
+    img = imread(image_path, mode=mode)  # Prevents crashes due to PNG images (ARGB)
+
+    if mode == "L":
+        # Expand the 1 channel grayscale to 3 channel grayscale image
+        temp_img = np.zeros(img.shape + (3,), dtype=np.uint8)
+        temp_img[:, :, 0] = img
+        temp_img[:, :, 1] = img.copy()
+        temp_img[:, :, 2] = img.copy()
+
+        img = temp_img
+
+    if load_dims:
+        img_WIDTH = img.shape[0]
+        img_HEIGHT = img.shape[1]
+        aspect_ratio = float(img_HEIGHT) / img_WIDTH
+
+        img_width = args.img_size
+        if maintain_aspect_ratio:
+            img_height = int(img_width * aspect_ratio)
+        else:
+            img_height = args.img_size
+
+    img = imresize(img, (img_width, img_height)).astype('float32')
+
+    # RGB -> BGR
+    img = img[:, :, ::-1]
+
+    img[:, :, 0] -= 103.939
+    img[:, :, 1] -= 116.779
+    img[:, :, 2] -= 123.68
+
+
+    img = np.expand_dims(img, axis=0)
+    return img
+
+
+# util function to convert a tensor into a valid image
+def deprocess_image(x):
+    x = x.reshape((img_width, img_height, 3))
+
+    x[:, :, 0] += 103.939
+    x[:, :, 1] += 116.779
+    x[:, :, 2] += 123.68
+
+    # BGR -> RGB
+    x = x[:, :, ::-1]
+
+    x = np.clip(x, 0, 255).astype('uint8')
+    return x
 
 
 
+base_image = K.variable(preprocess_image(base_image_path, True, read_mode=read_mode))
+
+style_reference_images = []
+for style_path in style_image_paths:
+    style_reference_images.append(K.variable(preprocess_image(style_path)))
+
+# this will contain our generated image
+combination_image = K.placeholder((1, img_width, img_height, 3)) # tensorflow
+
+image_tensors = [base_image]
+for style_image_tensor in style_reference_images:
+    image_tensors.append(style_image_tensor)
+image_tensors.append(combination_image)
+
+nb_tensors = len(image_tensors)
+nb_style_images = nb_tensors - 2 # Content and Output image not considered
+
+# combine the various images into a single Keras tensor
+input_tensor = K.concatenate(image_tensors, axis=0)
+
+shape = (nb_tensors, img_width, img_height, 3) #tensorflow
+
+ip = Input(tensor=input_tensor, shape=shape)
+
+#end proc_img
 
 
+#build the model
+ip = Input(tensor=input_tensor, shape=shape)
 
-# input_tensor = [0,0,0]
-# shape = (0,0)
+# build the VGG16 network with our 3 images as input
+x = Convolution2D(64, 3, 3, activation='relu', name='conv1_1', border_mode='same')(ip)
+x = Convolution2D(64, 3, 3, activation='relu', name='conv1_2', border_mode='same')(x)
+x = pooling_func(x)
 
-# ip = Input(tensor=input_tensor, shape=shape)
+x = Convolution2D(128, 3, 3, activation='relu', name='conv2_1', border_mode='same')(x)
+x = Convolution2D(128, 3, 3, activation='relu', name='conv2_2', border_mode='same')(x)
+x = pooling_func(x)
 
-# # build the VGG16 network with our 3 images as input
-# x = Convolution2D(64, 3, 3, activation='relu', name='conv1_1', border_mode='same')(ip)
-# x = Convolution2D(64, 3, 3, activation='relu', name='conv1_2', border_mode='same')(x)
-# x = pooling_func(x)
+x = Convolution2D(256, 3, 3, activation='relu', name='conv3_1', border_mode='same')(x)
+x = Convolution2D(256, 3, 3, activation='relu', name='conv3_2', border_mode='same')(x)
+x = Convolution2D(256, 3, 3, activation='relu', name='conv3_3', border_mode='same')(x)
+x = pooling_func(x)
 
-# x = Convolution2D(128, 3, 3, activation='relu', name='conv2_1', border_mode='same')(x)
-# x = Convolution2D(128, 3, 3, activation='relu', name='conv2_2', border_mode='same')(x)
-# x = pooling_func(x)
+x = Convolution2D(512, 3, 3, activation='relu', name='conv4_1', border_mode='same')(x)
+x = Convolution2D(512, 3, 3, activation='relu', name='conv4_2', border_mode='same')(x)
+x = Convolution2D(512, 3, 3, activation='relu', name='conv4_3', border_mode='same')(x)
+x = pooling_func(x)
 
-# x = Convolution2D(256, 3, 3, activation='relu', name='conv3_1', border_mode='same')(x)
-# x = Convolution2D(256, 3, 3, activation='relu', name='conv3_2', border_mode='same')(x)
-# x = Convolution2D(256, 3, 3, activation='relu', name='conv3_3', border_mode='same')(x)
-# if args.model == "vgg19":
-#     x = Convolution2D(256, 3, 3, activation='relu', name='conv3_4', border_mode='same')(x)
-# x = pooling_func(x)
+x = Convolution2D(512, 3, 3, activation='relu', name='conv5_1', border_mode='same')(x)
+x = Convolution2D(512, 3, 3, activation='relu', name='conv5_2', border_mode='same')(x)
+x = Convolution2D(512, 3, 3, activation='relu', name='conv5_3', border_mode='same')(x)
+x = pooling_func(x)
 
-# x = Convolution2D(512, 3, 3, activation='relu', name='conv4_1', border_mode='same')(x)
-# x = Convolution2D(512, 3, 3, activation='relu', name='conv4_2', border_mode='same')(x)
-# x = Convolution2D(512, 3, 3, activation='relu', name='conv4_3', border_mode='same')(x)
-# if args.model == "vgg19":
-#     x = Convolution2D(512, 3, 3, activation='relu', name='conv4_4', border_mode='same')(x)
-# x = pooling_func(x)
+model = Model(ip, x)
 
-# x = Convolution2D(512, 3, 3, activation='relu', name='conv5_1', border_mode='same')(x)
-# x = Convolution2D(512, 3, 3, activation='relu', name='conv5_2', border_mode='same')(x)
-# x = Convolution2D(512, 3, 3, activation='relu', name='conv5_3', border_mode='same')(x)
-# if args.model == "vgg19":
-#     x = Convolution2D(512, 3, 3, activation='relu', name='conv5_4', border_mode='same')(x)
-# x = pooling_func(x)
-
-# model = Model(ip, x)
 
 # if K.image_dim_ordering() == "th":
 #     if args.model == "vgg19":

@@ -79,6 +79,3 @@ input_tensor = K.concatenate(image_tensors, axis=0)
 shape = (nb_tensors, img_width, img_height, 3) #tensorflow
 
 ip = Input(tensor=input_tensor, shape=shape)
-
-
-    

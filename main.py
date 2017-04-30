@@ -12,6 +12,12 @@ from keras import backend as K
 from keras.utils.data_utils import get_file
 from keras.utils.layer_utils import convert_all_kernels_in_model
 
+THEANO_WEIGHTS_PATH_NO_TOP = 'https://github.com/fchollet/deep-learning-models/releases/download/v0.1/vgg16_weights_th_dim_ordering_th_kernels_notop.h5'
+TF_WEIGHTS_PATH_NO_TOP = 'https://github.com/fchollet/deep-learning-models/releases/download/v0.1/vgg16_weights_tf_dim_ordering_tf_kernels_notop.h5'
+
+TH_19_WEIGHTS_PATH_NO_TOP = 'https://github.com/fchollet/deep-learning-models/releases/download/v0.1/vgg19_weights_th_dim_ordering_th_kernels_notop.h5'
+TF_19_WEIGHTS_PATH_NO_TOP = 'https://github.com/fchollet/deep-learning-models/releases/download/v0.1/vgg19_weights_tf_dim_ordering_tf_kernels_notop.h5'
+
 parser = argparse.ArgumentParser(description='Neural style transfer with Keras.')
 parser.add_argument('base_image_path', metavar='base', type=str,
                     help='Path to the image to transform.')
@@ -28,8 +34,11 @@ parser.add_argument("--image_size", dest="img_size", default=400, type=int,
 parser.add_argument("--content_weight", dest="content_weight", default=0.025, type=float,
                     help="Weight of content")
 
-parser.add_argument("--style_weight", dest="style_weight", default=1.0, type=float,
+parser.add_argument("--style_weight", dest="style_weight", default=[1], type=float,
                     help="Weight of style, can be multiple for multiple styles")
+
+parser.add_argument("--total_variation_weight", dest="tv_weight", default=8.5e-5, type=float,
+                    help="Total Variation weight")
 
 parser.add_argument("--style_scale", dest="style_scale", default=1.0, type=float,
                     help="Scale the weighing of the style")
@@ -48,7 +57,6 @@ parser.add_argument("--init_image", dest="init_image", default="content", type=s
 
 
 args = parser.parse_args()
-
 base_image_path = args.base_image_path
 style_reference_image_paths = [args.style_image_path]
 result_prefix = args.result_prefix
@@ -72,21 +80,12 @@ def pooling_func(x):
 
 #start proc_img
 
-def preprocess_image(image_path, load_dims=False, read_mode="color", maintain_aspect_ratio=False):
+def preprocess_image(image_path, load_dims=False):
     global img_width, img_height, img_WIDTH, img_HEIGHT, aspect_ratio
 
     mode = "RGB"
     # mode = "RGB" if read_mode == "color" else "L"
     img = imread(image_path, mode=mode)  # Prevents crashes due to PNG images (ARGB)
-
-    # if mode == "L":
-    #     # Expand the 1 channel grayscale to 3 channel grayscale image
-    #     temp_img = np.zeros(img.shape + (3,), dtype=np.uint8)
-    #     temp_img[:, :, 0] = img
-    #     temp_img[:, :, 1] = img.copy()
-    #     temp_img[:, :, 2] = img.copy()
-    #
-    #     img = temp_img
 
     if load_dims:
         img_WIDTH = img.shape[0]
@@ -94,10 +93,7 @@ def preprocess_image(image_path, load_dims=False, read_mode="color", maintain_as
         aspect_ratio = float(img_HEIGHT) / img_WIDTH
 
         img_width = args.img_size
-        if maintain_aspect_ratio:
-            img_height = int(img_width * aspect_ratio)
-        else:
-            img_height = args.img_size
+        img_height = int(img_width * aspect_ratio)
 
     img = imresize(img, (img_width, img_height)).astype('float32')
 
@@ -129,7 +125,7 @@ def deprocess_image(x):
 
 
 
-base_image = K.variable(preprocess_image(base_image_path, True, read_mode=read_mode))
+base_image = K.variable(preprocess_image(base_image_path, True))
 
 style_reference_images = [K.variable(preprocess_image(path)) for path in style_image_paths]
 
@@ -178,6 +174,12 @@ x = Convolution2D(512, 3, 3, activation='relu', name='conv5_3', border_mode='sam
 x = pooling_func(x)
 
 model = Model(model_input, x)
+
+weights = get_file('vgg16_weights_tf_dim_ordering_tf_kernels_notop.h5', TF_WEIGHTS_PATH_NO_TOP, cache_subdir='models')
+
+print("Weights Path: ", weights)
+
+model.load_weights(weights)
 
 print('Model loaded.')
 
@@ -317,7 +319,7 @@ evaluator = Evaluator()
 
 
 if "content" in args.init_image or "gray" in args.init_image:
-    x = preprocess_image(base_image_path, True, read_mode=read_mode)
+    x = preprocess_image(base_image_path, True)
 elif "noise" in args.init_image:
     x = np.random.uniform(0, 255, (1, img_width, img_height, 3)) - 128.
 
@@ -325,12 +327,10 @@ elif "noise" in args.init_image:
         x = x.transpose((0, 3, 1, 2))
 else:
     print("Using initial image : ", args.init_image)
-    x = preprocess_image(args.init_image, read_mode=read_mode)
+    x = preprocess_image(args.init_image)
 
 num_iter = args.num_iter
 prev_min_val = -1
-
-improvement_threshold = float(args.min_improvement)
 
 for i in range(num_iter):
     print("Starting iteration %d of %d" % ((i + 1), num_iter))
@@ -350,16 +350,10 @@ for i in range(num_iter):
 
     img_ht = int(img_width * aspect_ratio)
     print("Rescaling Image to (%d, %d)" % (img_width, img_ht))
-    img = imresize(img, (img_width, img_ht), interp=args.rescale_method)
+    img = imresize(img, (img_width, img_ht), interp="bilinear")
 
     fname = result_prefix + '_at_iteration_%d.png' % (i + 1)
     imsave(fname, img)
     end_time = time.time()
     print('Image saved as', fname)
     print('Iteration %d completed in %ds' % (i + 1, end_time - start_time))
-
-    if improvement_threshold is not 0.0:
-        if improvement < improvement_threshold and improvement is not 0.0:
-            print("Improvement (%f) is less than improvement threshold (%f). Early stopping script." % (
-                improvement, improvement_threshold))
-            exit()

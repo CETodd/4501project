@@ -22,7 +22,7 @@ parser = argparse.ArgumentParser(description='Neural style transfer with Keras.'
 parser.add_argument('base_image_path', metavar='base', type=str,
                     help='Path to the image to transform.')
 
-parser.add_argument('style_image_path', metavar='ref', type=str,
+parser.add_argument('style_image_paths', metavar='ref', nargs='+', type=str,
                     help='Path to the style reference image.')
 
 parser.add_argument('result_prefix', metavar='res_prefix', type=str,
@@ -34,7 +34,7 @@ parser.add_argument("--image_size", dest="img_size", default=400, type=int,
 parser.add_argument("--content_weight", dest="content_weight", default=0.025, type=float,
                     help="Weight of content")
 
-parser.add_argument("--style_weight", dest="style_weight", default=[1], type=float,
+parser.add_argument("--style_weight", dest="style_weight", nargs='+', default=[1], type=float,
                     help="Weight of style, can be multiple for multiple styles")
 
 parser.add_argument("--total_variation_weight", dest="tv_weight", default=8.5e-5, type=float,
@@ -58,7 +58,8 @@ parser.add_argument("--init_image", dest="init_image", default="content", type=s
 
 args = parser.parse_args()
 base_image_path = args.base_image_path
-style_reference_image_paths = [args.style_image_path]
+style_reference_image_paths = args.style_image_paths
+style_image_paths = [path for path in args.style_image_paths]
 result_prefix = args.result_prefix
 content_weight = args.content_weight
 total_variation_weight = args.tv_weight
@@ -69,10 +70,15 @@ img_WIDTH = img_HEIGHT = 0
 aspect_ratio = 0
 
 read_mode = "color"
+style_weights = []
+if len(style_image_paths) != len(args.style_weight):
+    weight_sum = sum(args.style_weight) * args.style_scale
+    count = len(style_image_paths)
 
-style_weights = [weight*args.style_scale for weight in args.style_weight]
-style_image_paths = [args.style_image_path]
-
+    for i in range(len(style_image_paths)):
+        style_weights.append(weight_sum / count)
+else:
+    style_weights = [weight*args.style_scale for weight in args.style_weight]
 
 def pooling_func(x):
     # return AveragePooling2D((2, 2), strides=(2, 2))(x)

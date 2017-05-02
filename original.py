@@ -31,7 +31,7 @@ parser = argparse.ArgumentParser(description='Neural style transfer with Keras.'
 parser.add_argument('base_image_path', metavar='base', type=str,
                     help='Path to the image to transform.')
 
-parser.add_argument('syle_image_paths', metavar='ref', nargs='+', type=str,
+parser.add_argument('style_image_paths', metavar='ref', nargs='+', type=str,
                     help='Path to the style reference image.')
 
 parser.add_argument('result_prefix', metavar='res_prefix', type=str,
@@ -99,7 +99,8 @@ def str_to_bool(v):
 
 args = parser.parse_args()
 base_image_path = args.base_image_path
-style_reference_image_paths = args.syle_image_paths
+print(args.style_image_paths)
+style_reference_image_paths = args.style_image_paths
 result_prefix = args.result_prefix
 
 style_image_paths = []

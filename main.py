@@ -70,7 +70,7 @@ aspect_ratio = 0
 
 read_mode = "color"
 
-style_weights = [weight*args.style_scale for weight in args.style_weight]
+s_wei = [weight*args.style_scale for weight in args.style_weight]
 style_image_paths = [args.style_image_path]
 
 
@@ -78,16 +78,18 @@ def pooling_func(x):
     # return AveragePooling2D((2, 2), strides=(2, 2))(x)
     return MaxPooling2D((2, 2), strides=(2, 2))(x)
 
-#start proc_img
+#start processing_img
 
-def preprocess_image(image_path, load_dims=False):
+# Processes the input image by subtracting the mean,
+# switching to BGR channels ordering and resizing the image by aspect ratio
+def preprocess_image(image_path, load_dimens=False):
     global img_width, img_height, img_WIDTH, img_HEIGHT, aspect_ratio
 
+    # Assumes the image is in RGB
     mode = "RGB"
-    # mode = "RGB" if read_mode == "color" else "L"
-    img = imread(image_path, mode=mode)  # Prevents crashes due to PNG images (ARGB)
+    image = imread(image_path, mode=mode)  
 
-    if load_dims:
+    if load_dimens:
         img_WIDTH = img.shape[0]
         img_HEIGHT = img.shape[1]
         aspect_ratio = float(img_HEIGHT) / img_WIDTH
@@ -95,21 +97,22 @@ def preprocess_image(image_path, load_dims=False):
         img_width = args.img_size
         img_height = int(img_width * aspect_ratio)
 
-    img = imresize(img, (img_width, img_height)).astype('float32')
+    image = imresize(image, (img_width, img_height)).astype('float32')
 
     # RGB -> BGR
-    img = img[:, :, ::-1]
+    image = image[:, :, ::-1]
 
-    img[:, :, 0] -= 103.939
-    img[:, :, 1] -= 116.779
-    img[:, :, 2] -= 123.68
-
-
-    img = np.expand_dims(img, axis=0)
-    return img
+    image[:, :, 0] -= 103.939
+    image[:, :, 1] -= 116.779
+    image[:, :, 2] -= 123.68
 
 
-# util function to convert a tensor into a valid image
+    image = np.expand_dims(image, axis=0)
+    return image
+
+
+# util function to convert a tensor into a valid image by
+# adding the mean back and switching back to RGB
 def deprocess_image(x):
     x = x.reshape((img_width, img_height, 3))
 
@@ -124,18 +127,17 @@ def deprocess_image(x):
     return x
 
 
-
 base_image = K.variable(preprocess_image(base_image_path, True))
 
-style_reference_images = [K.variable(preprocess_image(path)) for path in style_image_paths]
+sref_img = [K.variable(preprocess_image(path)) for path in style_image_paths]
 
 # this will contain our generated image
-combination_image = K.placeholder((1, img_width, img_height, 3)) # tensorflow
+combo_img = K.placeholder((1, img_width, img_height, 3)) # tensorflow
 
 image_tensors = [base_image]
-for style_image_tensor in style_reference_images:
+for style_image_tensor in sref_img:
     image_tensors.append(style_image_tensor)
-image_tensors.append(combination_image)
+image_tensors.append(combo_img)
 
 nb_tensors = len(image_tensors)
 nb_style_images = nb_tensors - 2 # Content and Output image not considered
@@ -188,7 +190,7 @@ outputs_dict = dict([(layer.name, layer.output) for layer in model.layers])
 shape_dict = dict([(layer.name, layer.output_shape) for layer in model.layers])
 
 # compute the neural style loss
-# first we need to define 4 util functions
+
 
 # the gram matrix of an image tensor (feature-wise outer product)
 def gram_matrix(x):
@@ -240,9 +242,9 @@ def total_variation_loss(x):
 loss = K.variable(0.)
 layer_features = outputs_dict[args.content_layer]  # 'conv5_2' or 'conv4_2'
 base_image_features = layer_features[0, :, :, :]
-combination_features = layer_features[nb_tensors - 1, :, :, :]
+combo_feat = layer_features[nb_tensors - 1, :, :, :]
 loss += content_weight * content_loss(base_image_features,
-                                      combination_features)
+                                      combo_feat)
 
 channel_index = -1
 
@@ -251,20 +253,20 @@ feature_layers = ['conv1_1', 'conv2_1', 'conv3_1', 'conv4_1', 'conv5_1']
 for layer_name in feature_layers:
     output_features = outputs_dict[layer_name]
     shape = shape_dict[layer_name]
-    combination_features = output_features[nb_tensors - 1, :, :, :]
+    combo_feat = output_features[nb_tensors - 1, :, :, :]
 
     style_features = output_features[1:nb_tensors - 1, :, :, :]
     sl = []
     for j in range(nb_style_images):
-        sl.append(style_loss(style_features[j], combination_features))
+        sl.append(style_loss(style_features[j], combo_feat))
 
     for j in range(nb_style_images):
-        loss += (style_weights[j] / len(feature_layers)) * sl[j]
+        loss += (s_wei[j] / len(feature_layers)) * sl[j]
 
-loss += total_variation_weight * total_variation_loss(combination_image)
+loss += total_variation_weight * total_variation_loss(combo_img)
 
 # get the gradients of the generated image wrt the loss
-grads = K.gradients(loss, combination_image)
+grads = K.gradients(loss, combo_img)
 
 outputs = [loss]
 if type(grads) in {list, tuple}:
@@ -272,7 +274,7 @@ if type(grads) in {list, tuple}:
 else:
     outputs.append(grads)
 
-f_outputs = K.function([combination_image], outputs)
+f_outputs = K.function([combo_img], outputs)
 
 
 def eval_loss_and_grads(x):

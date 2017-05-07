@@ -1,5 +1,6 @@
 from scipy.misc import imread, imresize, imsave, fromimage, toimage
 from scipy.optimize import fmin_l_bfgs_b
+from theano.tensor.nnet.neighbours import images2neibs
 import scipy.interpolate
 import scipy.ndimage
 import numpy as np
@@ -450,9 +451,27 @@ outputs_dict = dict([(layer.name, layer.output) for layer in model.layers])
 shape_dict = dict([(layer.name, layer.output_shape) for layer in model.layers])
 
 
+# compute the neural style loss
+# first we need to define 4 util functions
+
+# the gram matrix of an image tensor (feature-wise outer product)
+def gram_matrix(x):
+    features = K.batch_flatten(K.permute_dimensions(x, (2, 0, 1)))
+    gram = K.dot(features, K.transpose(features))
+    return gram
+
+
+# the 3rd loss function, total variation loss,
+# designed to keep the generated image locally coherent
+def total_variation_loss(x):
+    assert K.ndim(x) == 4
+    a = K.square(x[:, :img_width - 1, :img_height - 1, :] - x[:, 1:, :img_height - 1, :])
+    b = K.square(x[:, :img_width - 1, :img_height - 1, :] - x[:, :img_width - 1, 1:, :])
+    return K.sum(K.pow(a + b, 1.25))
+
+
 def make_patches(x, patch_size, patch_stride):
     '''Break image `x` up into a bunch of patches.'''
-    from theano.tensor.nnet.neighbours import images2neibs
     x = K.expand_dims(x, 0)
     patches = images2neibs(x,
         (patch_size, patch_size), (patch_stride, patch_stride),
@@ -464,35 +483,23 @@ def make_patches(x, patch_size, patch_stride):
     return patches, patches_norm
 
 
-def find_patch_matches(a, a_norm, b):
-    '''For each patch in A, find the best matching patch in B'''
+def find_patch_matches(comb, comb_norm, ref):
+    '''For each patch in combination, find the best matching patch in reference'''
     # we want cross-correlation here so flip the kernels
-    convs = K.conv2d(a, b[:, :, ::-1, ::-1], border_mode='valid')
-    argmax = K.argmax(convs / a_norm, axis=1)
+    convs = K.conv2d(comb, ref[:, :, ::-1, ::-1], border_mode='valid')
+    argmax = K.argmax(convs / comb_norm, axis=1)
     return argmax
 
-# compute the neural style loss
-# first we need to define 4 util functions
-
-# the gram matrix of an image tensor (feature-wise outer product)
-def gram_matrix(x):
-    features = K.batch_flatten(K.permute_dimensions(x, (2, 0, 1)))
-    gram = K.dot(features, K.transpose(features))
-    return gram
-
-
-# the "style loss" is designed to maintain
-# the style of the reference image in the generated image.
-# It is based on the gram matrices (which capture style) of
-# feature maps from the style reference image
-# and from the generated image
-def style_loss(style, combination):
-    style_gram = gram_matrix(style)
-    combo_gram = gram_matrix(combination)
-    channels = 3
-    size = img_width * img_height
-    return K.sum(K.square(style_gram - combo_gram)) / (4. * (channels ** 2) * (size ** 2))
-
+def mrf_loss(source, combination, patch_size=3, patch_stride=1):
+    '''CNNMRF http://arxiv.org/pdf/1601.04589v1.pdf'''
+    # extract patches from feature maps
+    combination_patches, combination_patches_norm = make_patches(combination, patch_size, patch_stride)
+    source_patches, source_patches_norm = make_patches(source, patch_size, patch_stride)
+    # find best patches and calculate loss
+    patch_ids = find_patch_matches(combination_patches, combination_patches_norm, source_patches / source_patches_norm)
+    best_source_patches = K.reshape(source_patches[patch_ids], K.shape(combination_patches))
+    loss = K.sum(K.square(best_source_patches - combination_patches)) / patch_size ** 2
+    return loss
 
 # an auxiliary loss function
 # designed to maintain the "content" of the
@@ -510,28 +517,6 @@ def content_loss(base, combination):
 
     return multiplier * K.sum(K.square(combination - base))
 
-
-# the 3rd loss function, total variation loss,
-# designed to keep the generated image locally coherent
-def total_variation_loss(x):
-    assert K.ndim(x) == 4
-    a = K.square(x[:, :img_width - 1, :img_height - 1, :] - x[:, 1:, :img_height - 1, :])
-    b = K.square(x[:, :img_width - 1, :img_height - 1, :] - x[:, :img_width - 1, 1:, :])
-    return K.sum(K.pow(a + b, 1.25))
-
-
-def mrf_loss(source, combination, patch_size=3, patch_stride=1):
-    '''CNNMRF http://arxiv.org/pdf/1601.04589v1.pdf'''
-    # extract patches from feature maps
-    combination_patches, combination_patches_norm = make_patches(combination, patch_size, patch_stride)
-    source_patches, source_patches_norm = make_patches(source, patch_size, patch_stride)
-    # find best patches and calculate loss
-    patch_ids = find_patch_matches(combination_patches, combination_patches_norm, source_patches / source_patches_norm)
-    best_source_patches = K.reshape(source_patches[patch_ids], K.shape(combination_patches))
-    loss = K.sum(K.square(best_source_patches - combination_patches)) / patch_size ** 2
-    return loss
-
-
 # combine these loss functions into a single scalar
 loss = K.variable(0.)
 layer_features = outputs_dict[args.content_layer]  # 'conv5_2' or 'conv4_2'
@@ -543,8 +528,9 @@ loss += content_weight * content_loss(base_image_features,
 channel_index = -1
 
 #Style Loss calculation
-feature_layers = ['conv1_1', 'conv2_1', 'conv3_1', 'conv4_1', 'conv5_1']
-for layer_name in feature_layers:
+mrf_layers = ['conv3_1', 'conv4_1']
+# feature_layers = ['conv1_1', 'conv2_1', 'conv3_1', 'conv4_1', 'conv5_1']
+for layer_name in mrf_layers:
     output_features = outputs_dict[layer_name]
     shape = shape_dict[layer_name]
     combination_features = output_features[nb_tensors - 1, :, :, :]
@@ -552,10 +538,10 @@ for layer_name in feature_layers:
     style_features = output_features[1:nb_tensors - 1, :, :, :]
     sl = []
     for j in range(nb_style_images):
-        sl.append(style_loss(style_features[j], combination_features))
+        sl.append(mrf_loss(style_features[j], combination_features))
 
     for j in range(nb_style_images):
-        loss += (style_weights[j] / len(feature_layers)) * sl[j]
+        loss += (style_weights[j] / len(mrf_layers)) * sl[j]
 
 loss += total_variation_weight * total_variation_loss(combination_image)
 
@@ -628,6 +614,13 @@ else:
 num_iter = args.num_iter
 prev_min_val = -1
 
+# for scaled_img in img_pyramid:
+#     image_tensors = [base_image]
+#     for style_image_tensor in style_reference_images:
+#         image_tensors.append(style_image_tensor)
+#     image_tensors.append(combination_image)
+#     input_tensor = K.concatenate(image_tensors, axis=0)
+#     model_input = Input(tensor=input_tensor, shape=shape)
 
 for i in range(num_iter):
     print("Starting iteration %d of %d" % ((i + 1), num_iter))

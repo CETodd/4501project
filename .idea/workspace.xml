@@ -1,43 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="88a01425-fa5d-432e-9f66-52d547a67925" name="Default" comment="">
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/output_images/dejavu_face_conv5_2.png" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/output_images/web_dog.png" />
-      <change type="NEW" beforePath="" afterPath="$PROJECT_DIR$/styles.txt" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/dog.jpg" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out2_at_iteration_1.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out2_at_iteration_2.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out2_at_iteration_3.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out2_at_iteration_4.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out2_at_iteration_5.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out2_at_iteration_6.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out2_at_iteration_7.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out2_at_iteration_8.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out2_at_iteration_9.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out3_at_iteration_1.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out3_at_iteration_10.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out3_at_iteration_2.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out3_at_iteration_3.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out3_at_iteration_4.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out3_at_iteration_5.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out3_at_iteration_6.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out3_at_iteration_7.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out3_at_iteration_8.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out3_at_iteration_9.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out_at_iteration_1.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out_at_iteration_2.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out_at_iteration_3.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out_at_iteration_4.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out_at_iteration_5.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out_at_iteration_6.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out_at_iteration_7.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out_at_iteration_8.png" afterPath="" />
-      <change type="DELETED" beforePath="$PROJECT_DIR$/out_at_iteration_9.png" afterPath="" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/main.py" afterPath="$PROJECT_DIR$/main.py" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/original.py" afterPath="$PROJECT_DIR$/original.py" />
-    </list>
+    <list default="true" id="88a01425-fa5d-432e-9f66-52d547a67925" name="Default" comment="" />
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="TRACKING_ENABLED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -395,8 +359,7 @@
     <servers />
   </component>
   <component name="ToolWindowManager">
-    <frame x="-9" y="-9" width="1938" height="1048" extended-state="7" />
-    <editor active="true" />
+    <frame x="-9" y="-9" width="1938" height="1048" extended-state="6" />
     <layout>
       <window_info id="TODO" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="6" side_tool="false" content_ui="tabs" />
       <window_info id="Event Log" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="7" side_tool="true" content_ui="tabs" />

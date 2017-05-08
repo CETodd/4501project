@@ -494,21 +494,7 @@ def find_patch_matches(comb, comb_norm, ref):
     argmax = K.argmax(convs / comb_norm, axis=1)
     return argmax
 
-def mrf_loss(style, combination, patch_size=3, patch_stride=1):
-    '''CNNMRF http://arxiv.org/pdf/1601.04589v1.pdf'''
-    # extract patches from feature maps
-#    combination_patches, combination_patches_norm = make_patches(combination, patch_size, patch_stride)
-    combination_patches = style_pmatcher.get_patches_for(style)
-    combination_patches_norm = style_pmatcher.normalize_patches(combination)
-#    style_patches, style_patches_norm = make_patches(style, patch_size, patch_stride)
-    # find best patches and calculate loss
-    #patch_ids = find_patch_matches(combination_patches, combination_patches_norm, source_patches / source_patches_norm)
 
-    style_pmatcher.update(style, True)
-    patch_coords = style_pmatcher.coords()
-    best_style_patches = K.reshape(patch_coords, K.shape(combination_patches))
-    loss = K.sum(K.square(best_style_patches - combination_patches)) / patch_size ** 2
-    return loss
 
 # an auxiliary loss function
 # designed to maintain the "content" of the

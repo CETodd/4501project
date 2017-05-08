@@ -409,6 +409,9 @@ input_tensor = K.concatenate(image_tensors, axis=0)
 
 shape = (nb_tensors, img_width, img_height, 3) #tensorflow
 
+comb_pmatcher = PatchMatcher((shape[1], shape[2], shape[3]), combination_image)
+style_pmatcher = PatchMatcher((shape[1], shape[2], shape[3]), combination_features)
+
 
 #build the model
 model_input = Input(tensor=input_tensor, shape=shape)
@@ -495,16 +498,14 @@ def mrf_loss(style, combination, patch_size=3, patch_stride=1):
     '''CNNMRF http://arxiv.org/pdf/1601.04589v1.pdf'''
     # extract patches from feature maps
 #    combination_patches, combination_patches_norm = make_patches(combination, patch_size, patch_stride)
-    combination_patches = PatchMatcher.get_patches_for(combination)
-    combination_patches_norm = PatchMatcher.normalize_patches(combination)
+    combination_patches = style_pmatcher.get_patches_for(style)
+    combination_patches_norm = style_pmatcher.normalize_patches(combination)
 #    style_patches, style_patches_norm = make_patches(style, patch_size, patch_stride)
-    style_patches = PatchMatcher.get_patches_for(combination)
-    style_patches_norm = PatchMatcher.normalize(combination)
     # find best patches and calculate loss
     #patch_ids = find_patch_matches(combination_patches, combination_patches_norm, source_patches / source_patches_norm)
 
-    PatchMatcher.update(style, True)
-    patch_coords = PatchMatcher.coords()
+    style_pmatcher.update(style, True)
+    patch_coords = style_pmatcher.coords()
     best_style_patches = K.reshape(patch_coords, K.shape(combination_patches))
     loss = K.sum(K.square(best_style_patches - combination_patches)) / patch_size ** 2
     return loss
@@ -629,6 +630,8 @@ prev_min_val = -1
 #     image_tensors.append(combination_image)
 #     input_tensor = K.concatenate(image_tensors, axis=0)
 #     model_input = Input(tensor=input_tensor, shape=shape)
+
+
 
 for i in range(num_iter):
     print("Starting iteration %d of %d" % ((i + 1), num_iter))

@@ -123,12 +123,13 @@ class PatchMatcher(object):
         self.delta_col = np.array([[[0.0]], [[self.min_propagration_col]]])
 
     def update(self, input_img, reverse_propagation=False):
-        input_patches = self.get_patches_for(input_img)
-        self.update_with_patches(self.normalize_patches(input_patches), reverse_propagation=reverse_propagation)
+        input_patches = make_patch_grid(input_img, self.patch_size)
+        self._propagate(self.normalize_patches(input_patches), reverse_propagation=reverse_propagation)
+        self._random_update(self.normalize_patches(input_patches))
 
-    def update_with_patches(self, input_patches, reverse_propagation=False):
-        self._propagate(input_patches, reverse_propagation=reverse_propagation)
-        self._random_update(input_patches)
+#    def update_with_patches(self, input_patches, reverse_propagation=False):
+#        self._propagate(input_patches, reverse_propagation=reverse_propagation)
+#        self._random_update(input_patches)
 
     def get_patches_for(self, img):
         return make_patch_grid(img, self.patch_size)
@@ -490,15 +491,22 @@ def find_patch_matches(comb, comb_norm, ref):
     argmax = K.argmax(convs / comb_norm, axis=1)
     return argmax
 
-def mrf_loss(source, combination, patch_size=3, patch_stride=1):
+def mrf_loss(style, combination, patch_size=3, patch_stride=1):
     '''CNNMRF http://arxiv.org/pdf/1601.04589v1.pdf'''
     # extract patches from feature maps
-    combination_patches, combination_patches_norm = make_patches(combination, patch_size, patch_stride)
-    source_patches, source_patches_norm = make_patches(source, patch_size, patch_stride)
+#    combination_patches, combination_patches_norm = make_patches(combination, patch_size, patch_stride)
+    combination_patches = PatchMatcher.get_patches_for(combination)
+    combination_patches_norm = PatchMatcher.normalize_patches(combination)
+#    style_patches, style_patches_norm = make_patches(style, patch_size, patch_stride)
+    style_patches = PatchMatcher.get_patches_for(combination)
+    style_patches_norm = PatchMatcher.normalize(combination)
     # find best patches and calculate loss
-    patch_ids = find_patch_matches(combination_patches, combination_patches_norm, source_patches / source_patches_norm)
-    best_source_patches = K.reshape(source_patches[patch_ids], K.shape(combination_patches))
-    loss = K.sum(K.square(best_source_patches - combination_patches)) / patch_size ** 2
+    #patch_ids = find_patch_matches(combination_patches, combination_patches_norm, source_patches / source_patches_norm)
+
+    PatchMatcher.update(style, True)
+    patch_coords = PatchMatcher.coords()
+    best_style_patches = K.reshape(patch_coords, K.shape(combination_patches))
+    loss = K.sum(K.square(best_style_patches - combination_patches)) / patch_size ** 2
     return loss
 
 # an auxiliary loss function

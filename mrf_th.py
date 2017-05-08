@@ -10,7 +10,7 @@ from sklearn.feature_extraction.image import reconstruct_from_patches_2d, extrac
 
 from keras.models import Model
 from keras.layers import Input
-from keras.layers.convolutional import Convolution2D, AveragePooling2D, MaxPooling2D
+from keras.layers.convolutional import Conv2D, AveragePooling2D, MaxPooling2D
 from keras import backend as K
 from keras.utils.data_utils import get_file
 from keras.utils.layer_utils import convert_all_kernels_in_model
@@ -366,6 +366,9 @@ def preprocess_image(image_path, load_dims=False):
     img[:, :, 1] -= 116.779
     img[:, :, 2] -= 123.68
 
+    if K.image_dim_ordering() == "th":
+        img = img.transpose((2, 0, 1)).astype('float32')
+
 
     img = np.expand_dims(img, axis=0)
     return img
@@ -373,7 +376,11 @@ def preprocess_image(image_path, load_dims=False):
 
 # util function to convert a tensor into a valid image
 def deprocess_image(x):
-    x = x.reshape((img_width, img_height, 3))
+    if K.image_dim_ordering() == "th":
+        x = x.reshape((3, img_width, img_height))
+        x = x.transpose((1, 2, 0))
+    else:
+        x = x.reshape((img_width, img_height, 3))
 
     x[:, :, 0] += 103.939
     x[:, :, 1] += 116.779
@@ -405,39 +412,45 @@ nb_style_images = nb_tensors - 2 # Content and Output image not considered
 # combine the various images into a single Keras tensor
 input_tensor = K.concatenate(image_tensors, axis=0)
 
-shape = (nb_tensors, img_width, img_height, 3) #tensorflow
+if K.image_dim_ordering() == "th":
+    shape = (nb_tensors, 3, img_width, img_height)
+else:
+    shape = (nb_tensors, img_width, img_height, 3)
 
 
 #build the model
 model_input = Input(tensor=input_tensor, shape=shape)
 
 # build the VGG16 network with our 3 images as input
-x = Convolution2D(64, 3, 3, activation='relu', name='conv1_1', border_mode='same')(model_input)
-x = Convolution2D(64, 3, 3, activation='relu', name='conv1_2', border_mode='same')(x)
+x = Conv2D(filters=64, kernel_size=(3, 3), activation='relu', name='conv1_1', padding='same')(model_input)
+x = Conv2D(64, (3, 3), activation='relu', name='conv1_2', padding='same')(x)
 x = pooling_func(x)
 
-x = Convolution2D(128, 3, 3, activation='relu', name='conv2_1', border_mode='same')(x)
-x = Convolution2D(128, 3, 3, activation='relu', name='conv2_2', border_mode='same')(x)
+x = Conv2D(128, (3, 3), activation='relu', name='conv2_1', padding='same')(x)
+x = Convolution2D(128, (3, 3), activation='relu', name='conv2_2', padding='same')(x)
 x = pooling_func(x)
 
-x = Convolution2D(256, 3, 3, activation='relu', name='conv3_1', border_mode='same')(x)
-x = Convolution2D(256, 3, 3, activation='relu', name='conv3_2', border_mode='same')(x)
-x = Convolution2D(256, 3, 3, activation='relu', name='conv3_3', border_mode='same')(x)
+x = Conv2D(256, (3, 3), activation='relu', name='conv3_1', padding='same')(x)
+x = Conv2D(256, (3, 3), activation='relu', name='conv3_2', padding='same')(x)
+x = Conv2D(256, (3, 3), activation='relu', name='conv3_3', padding='same')(x)
 x = pooling_func(x)
 
-x = Convolution2D(512, 3, 3, activation='relu', name='conv4_1', border_mode='same')(x)
-x = Convolution2D(512, 3, 3, activation='relu', name='conv4_2', border_mode='same')(x)
-x = Convolution2D(512, 3, 3, activation='relu', name='conv4_3', border_mode='same')(x)
+x = Conv2D(512, (3, 3), activation='relu', name='conv4_1', padding='same')(x)
+x = Conv2D(512, (3, 3), activation='relu', name='conv4_2', padding='same')(x)
+x = Conv2D(512, (3, 3), activation='relu', name='conv4_3', padding='same')(x)
 x = pooling_func(x)
 
-x = Convolution2D(512, 3, 3, activation='relu', name='conv5_1', border_mode='same')(x)
-x = Convolution2D(512, 3, 3, activation='relu', name='conv5_2', border_mode='same')(x)
-x = Convolution2D(512, 3, 3, activation='relu', name='conv5_3', border_mode='same')(x)
+x = Conv2D(512, (3, 3), activation='relu', name='conv5_1', padding='same')(x)
+x = Conv2D(512, (3, 3), activation='relu', name='conv5_2', padding='same')(x)
+x = Conv2D(512, (3, 3), activation='relu', name='conv5_3', padding='same')(x)
 x = pooling_func(x)
 
 model = Model(model_input, x)
 
-weights = get_file('vgg16_weights_tf_dim_ordering_tf_kernels_notop.h5', TF_WEIGHTS_PATH_NO_TOP, cache_subdir='models')
+if K.image_dim_ordering() == "th":
+    weights = get_file('vgg16_weights_th_dim_ordering_th_kernels_notop.h5', THEANO_WEIGHTS_PATH_NO_TOP, cache_subdir='models')
+else:
+    weights = get_file('vgg16_weights_tf_dim_ordering_tf_kernels_notop.h5', TF_WEIGHTS_PATH_NO_TOP, cache_subdir='models')
 
 print("Weights Path: ", weights)
 
@@ -448,16 +461,6 @@ print('Model loaded.')
 # get the symbolic outputs of each "key" layer (we gave them unique names).
 outputs_dict = dict([(layer.name, layer.output) for layer in model.layers])
 shape_dict = dict([(layer.name, layer.output_shape) for layer in model.layers])
-
-
-# compute the neural style loss
-# first we need to define 4 util functions
-
-# the gram matrix of an image tensor (feature-wise outer product)
-def gram_matrix(x):
-    features = K.batch_flatten(K.permute_dimensions(x, (2, 0, 1)))
-    gram = K.dot(features, K.transpose(features))
-    return gram
 
 
 # the 3rd loss function, total variation loss,
@@ -493,10 +496,10 @@ def find_patch_matches(comb, comb_norm, ref):
 def mrf_loss(source, combination, patch_size=3, patch_stride=1):
     '''CNNMRF http://arxiv.org/pdf/1601.04589v1.pdf'''
     # extract patches from feature maps
-    source = K.expand_dims(source, 0).eval(session=K.get_session())
-    combination = K.expand_dims(combination, 0).eval(session=K.get_session())
-    combination_patches, combination_patches_norm = make_patches(combination, patch_size, patch_stride)
-    source_patches, source_patches_norm = make_patches(source, patch_size, patch_stride)
+    source = K.expand_dims(source, 0)
+    combination = K.expand_dims(combination, 0)
+    combination_patches, combination_patches_norm = make_patches(K.variable(combination).eval, patch_size, patch_stride)
+    source_patches, source_patches_norm = make_patches(K.variable(source).eval, patch_size, patch_stride)
     # find best patches and calculate loss
     patch_ids = find_patch_matches(combination_patches, combination_patches_norm, source_patches / source_patches_norm)
     best_source_patches = K.reshape(source_patches[patch_ids], K.shape(combination_patches))
@@ -507,7 +510,8 @@ def mrf_loss(source, combination, patch_size=3, patch_stride=1):
 # designed to maintain the "content" of the
 # base image in the generated image
 def content_loss(base, combination):
-    channels = K.shape(base)[-1]
+    channel_dim = 0 if K.image_dim_ordering() == "th" else -1
+    channels = K.shape(base)[channel_dim]
     size = img_width * img_height
 
     if args.content_loss_type == 1:
@@ -605,6 +609,7 @@ if "content" in args.init_image or "gray" in args.init_image:
     x = preprocess_image(base_image_path, True)
 elif "noise" in args.init_image:
     x = np.random.uniform(0, 255, (1, img_width, img_height, 3)) - 128.
+
 
     if K.image_dim_ordering() == "th":
         x = x.transpose((0, 3, 1, 2))
